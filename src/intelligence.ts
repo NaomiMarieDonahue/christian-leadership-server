@@ -23,11 +23,12 @@ async function getLatestModel(client: OpenAI): Promise<string> {
       .sort()
       .reverse()
 
-    // Prefer: o3 > gpt-4o > gpt-4-turbo > gpt-4
+    // Prefer gpt-4o for reliable JSON output; o3 models don't support structured JSON well
     const preferred = [
-      'o3', 'o3-mini',
-      'gpt-4o', 'gpt-4o-mini',
+      'gpt-4o',
+      'gpt-4o-mini',
       'gpt-4-turbo', 'gpt-4',
+      'o3', 'o3-mini',
     ]
 
     for (const prefix of preferred) {
@@ -125,7 +126,8 @@ export class IntelligenceEngine {
     try {
       const response = await this.client.chat.completions.create({
         model: resolvedModel,
-        max_completion_tokens: 120,
+        max_tokens: 120,
+        temperature: 0.7,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           {
