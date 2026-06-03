@@ -97,7 +97,7 @@ export class IntelligenceEngine {
     try {
       // Whisper expects a file-like object — wrap PCM as WAV
       const wavBuffer = pcmToWav(pcmData, 16000, 1, 16)
-      const file = new File([wavBuffer], 'audio.wav', { type: 'audio/wav' })
+      const file = new File([new Uint8Array(wavBuffer)], 'audio.wav', { type: 'audio/wav' })
 
       const response = await this.client.audio.transcriptions.create({
         model: 'whisper-1',
