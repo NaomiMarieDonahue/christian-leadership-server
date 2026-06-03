@@ -126,7 +126,6 @@ export class IntelligenceEngine {
       const response = await this.client.chat.completions.create({
         model: resolvedModel,
         max_completion_tokens: 120,
-        temperature: 0.7,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           {
