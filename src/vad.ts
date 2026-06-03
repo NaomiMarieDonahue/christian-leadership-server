@@ -1,9 +1,9 @@
-// Simple energy-based Voice Activity Detection
-// Prevents sending silence to Whisper, saving cost and battery
+// Voice Activity Detection — tuned for conversational speech
+// Lower threshold = more sensitive = fewer missed words
 
-const SILENCE_THRESHOLD = 300      // RMS below this = silence
-const SPEECH_FRAMES_TO_TRIGGER = 3 // Consecutive loud frames before we consider it speech
-const SILENCE_FRAMES_TO_STOP = 40  // Consecutive silent frames before we stop
+const SILENCE_THRESHOLD = 150     // Lowered from 300 — catches quieter speech
+const SPEECH_FRAMES_TO_TRIGGER = 2 // Faster trigger
+const SILENCE_FRAMES_TO_STOP = 30  // ~1.5s of silence before we stop
 
 export class VAD {
   private speechFrames = 0
@@ -14,7 +14,6 @@ export class VAD {
     return this._isSpeaking
   }
 
-  // Returns true if this chunk should be forwarded to transcription
   process(pcmBuffer: Buffer): boolean {
     const rms = computeRMS(pcmBuffer)
 
@@ -43,7 +42,6 @@ export class VAD {
 }
 
 function computeRMS(buffer: Buffer): number {
-  // PCM 16-bit signed little-endian
   let sum = 0
   const samples = buffer.length / 2
   for (let i = 0; i < buffer.length - 1; i += 2) {

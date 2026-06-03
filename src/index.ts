@@ -5,26 +5,22 @@ import { IntelligenceEngine } from './intelligence.js'
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10)
 
-// Saved insights persist in memory (extend to Redis/DB later if needed)
 const savedInsights: Array<{ type: string; text: string; timestamp: number }> = []
 
 async function start() {
   const app = Fastify({ logger: true })
   await app.register(fastifyWebsocket)
 
-  // ─── Health check ──────────────────────────────────────────────────────────
   app.get('/health', async () => ({
     status: 'ok',
     service: 'Christian Leadership',
     timestamp: new Date().toISOString(),
   }))
 
-  // ─── Saved insights API (used by Netlify dashboard) ────────────────────────
   app.get('/insights', async () => ({
-    insights: savedInsights.slice(-100), // Last 100
+    insights: savedInsights.slice(-100),
   }))
 
-  // ─── WebSocket stream endpoint ─────────────────────────────────────────────
   app.register(async (fastify) => {
     fastify.get('/stream', { websocket: true }, (socket) => {
       console.log('Glasses connected')
@@ -32,33 +28,24 @@ async function start() {
       const vad = new VAD()
       const engine = new IntelligenceEngine()
 
-      // Initialize model selection on connect
-      engine.initialize().then(() => {
-        socket.send(JSON.stringify({
-          type: 'status',
-          text: '● Listening       Christian Leadership',
-        }))
-      }).catch(console.error)
+      engine.initialize().catch(console.error)
 
       socket.on('message', (rawData: Buffer | string) => {
-        // Binary = PCM audio from glasses mic
-        if (Buffer.isBuffer(rawData)) {
-          const isSpeaking = vad.process(rawData)
+        // Binary audio from glasses
+        if (Buffer.isBuffer(rawData) || (rawData as any) instanceof Uint8Array) {
+          const buf = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData)
+          const isSpeaking = vad.process(buf)
 
-          engine.onAudioChunkWithCallback(rawData, isSpeaking, (insight) => {
-            // Send insight to glasses
+          engine.onAudioChunkWithCallback(buf, isSpeaking, (insight) => {
             socket.send(JSON.stringify({
               type: 'insight',
-              payload: {
-                ...insight,
-                timestamp: Date.now(),
-              },
+              payload: { ...insight, timestamp: Date.now() },
             }))
           })
           return
         }
 
-        // Text = control messages from glasses app
+        // Text control messages
         try {
           const msg = JSON.parse(rawData.toString()) as {
             type: string
@@ -67,15 +54,14 @@ async function start() {
 
           if (msg.type === 'save' && msg.payload) {
             savedInsights.push(msg.payload)
-            console.log('Insight saved:', msg.payload.text)
+            console.log('Saved:', msg.payload.text)
           }
 
           if (msg.type === 'clear_memory') {
             engine.clearMemory()
             vad.reset()
-            console.log('Memory cleared')
           }
-        } catch { /* ignore malformed messages */ }
+        } catch { /* ignore */ }
       })
 
       socket.on('close', () => {
