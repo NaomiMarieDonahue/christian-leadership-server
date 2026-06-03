@@ -136,9 +136,17 @@ export class IntelligenceEngine {
       })
 
       const raw = response.choices[0]?.message?.content?.trim()
-      if (!raw) return null
+      if (!raw) {
+        console.log('Insight: no content returned from model')
+        return null
+      }
 
-      const parsed = JSON.parse(raw) as { type: string; text?: string }
+      console.log('Raw model response:', raw)
+
+      // Strip markdown code fences if present
+      const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+
+      const parsed = JSON.parse(cleaned) as { type: string; text?: string }
       if (parsed.type === 'silence' || !parsed.text) return null
 
       console.log('Insight:', parsed)
