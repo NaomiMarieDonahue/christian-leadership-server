@@ -1,10 +1,8 @@
 import Fastify from 'fastify'
 import fastifyWebsocket from '@fastify/websocket'
-import { VAD } from './vad.js'
 import { IntelligenceEngine } from './intelligence.js'
 
 const PORT = parseInt(process.env.PORT ?? '3000', 10)
-
 const savedInsights: Array<{ type: string; text: string; timestamp: number }> = []
 
 async function start() {
@@ -25,23 +23,22 @@ async function start() {
     fastify.get('/stream', { websocket: true }, (socket) => {
       console.log('Glasses connected')
 
-      const vad = new VAD()
       const engine = new IntelligenceEngine()
+
+      engine.setInsightCallback((insight) => {
+        socket.send(JSON.stringify({
+          type: 'insight',
+          payload: { ...insight, timestamp: Date.now() },
+        }))
+      })
 
       engine.initialize().catch(console.error)
 
       socket.on('message', (rawData: Buffer | string) => {
         // Binary audio from glasses
         if (Buffer.isBuffer(rawData) || (rawData as any) instanceof Uint8Array) {
-          const buf = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData)
-          const isSpeaking = vad.process(buf)
-
-          engine.onAudioChunkWithCallback(buf, isSpeaking, (insight) => {
-            socket.send(JSON.stringify({
-              type: 'insight',
-              payload: { ...insight, timestamp: Date.now() },
-            }))
-          })
+          const buf = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData as any)
+          engine.addAudioChunk(buf)
           return
         }
 
@@ -51,22 +48,19 @@ async function start() {
             type: string
             payload?: { type: string; text: string; timestamp: number }
           }
-
           if (msg.type === 'save' && msg.payload) {
             savedInsights.push(msg.payload)
             console.log('Saved:', msg.payload.text)
           }
-
           if (msg.type === 'clear_memory') {
             engine.clearMemory()
-            vad.reset()
           }
         } catch { /* ignore */ }
       })
 
       socket.on('close', () => {
         console.log('Glasses disconnected')
-        vad.reset()
+        engine.destroy()
       })
 
       socket.on('error', (err: Error) => {
